@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Play On Connect</string>
+    <string name="header_description">Create Rules to play an Action on an Event (Android 9+):\n- play music file(s) when a bluetooth device is connected.\n- open a website url e.g. youtube when a bluetooth device is connected.</string>
+
+    <string name="action_add_rule">Add rule</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_copy">Duplicate</string>
+    <string name="rule_deleted_label">Rule deleted</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_grant">Grant</string>
+    <string name="action_allow">Allow</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_close">Close</string>
+
+    <string name="empty_rules">No rules yet.\nTap + to add one.</string>
+    <string name="file_missing">Sound file missing</string>
+    <string name="summary_loops">Loops</string>
+    <string name="summary_plays_once">Plays once</string>
+    <string name="summary_stops_after">Stops after %1$s min</string>
+    <string name="summary_fades_over">fades over %1$d s</string>
+    <string name="summary_files_count">%1$d files</string>
+    <string name="summary_mode_browser">In browser</string>
+    <string name="summary_mode_dedicated">In app</string>
+    <string name="label_sound">Sound</string>
+    <string name="or_label">Or</string>
+    <string name="undo_delete">Undo Delete</string>
+
+    <string name="title_add_rule">Add rule</string>
+    <string name="title_edit_rule">Edit rule</string>
+    <string name="section_trigger">Trigger</string>
+    <string name="section_action">Action</string>
+    <string name="trigger_type_bluetooth">On Bluetooth device connected</string>
+    <string name="action_type_play_sound">Play sound</string>
+    <string name="action_type_open_url">Open URL</string>
+
+    <string name="pick_device">Select Bluetooth device</string>
+    <string name="no_device_selected">No device selected</string>
+    <string name="no_paired_devices">No paired devices found. Pair one in system Bluetooth settings first.</string>
+    <string name="no_bluetooth">This device has no Bluetooth adapter.</string>
+    <string name="badge_connected">Connected</string>
+
+    <string name="choose_sound">Choose sound file(s)</string>
+    <string name="loop_switch">Loop playback until Stop</string>
+    <string name="max_minutes_label">Stop after (minutes) (0 = don\'t stop)</string>
+    <string name="max_minutes_placeholder">No limit</string>
+    <string name="fade_seconds_label">Fade out over (seconds)</string>
+    <string name="fade_seconds_placeholder">No fade</string>
+
+    <string name="url_label">URL</string>
+    <string name="url_placeholder">https://youtube.com/…</string>
+    <string name="url_mode_browser">Web browser</string>
+    <string name="url_mode_dedicated">Dedicated app</string>
+    <string name="pick_browser_app">Browser app</string>
+    <string name="pick_app_to_use">App to use</string>
+    <string name="choose_app">Choose app…</string>
+    <string name="no_apps_found">No apps found that can open this link.</string>
+    <string name="required_no_default_browser">Required: no default browser is set on this device.</string>
+    <string name="required_no_dedicated_app">Required: no dedicated app is set for this link.</string>
+
+    <string name="banner_bt_permission">Grant the Bluetooth permission so connections can be detected.</string>
+
+    <string name="permissions_section_title">Permissions</string>
+    <string name="perm_bluetooth_grant">Grant Bluetooth permission</string>
+    <string name="perm_bluetooth_granted">Bluetooth permission granted</string>
+    <string name="perm_notifications_grant">Grant notification permission</string>
+    <string name="perm_notifications_granted">Notification permission granted</string>
+    <string name="perm_overlay_grant">Grant overlay permission</string>
+    <string name="perm_overlay_granted">Overlay permission granted</string>
+    <string name="perm_overlay_note">↳ Optional; use if some app features don\'t work in the background autonomously - the opening of URLs is a Foreground Action and requires this permission on most devices (unless the app is somehow active).</string>
+
+    <string name="notification_channel_name">Rule monitoring</string>
+    <string name="notification_channel_desc">Shows when Play On Connect is listening for Bluetooth devices</string>
+    <string name="notification_playing">Playing: %1$s</string>
+
+    <string name="toast_playing">Playing: %1$s</string>
+    <string name="toast_opening_url">Opening: %1$s</string>
+    <string name="toast_stopped">Stopped</string>
+    <string name="toast_stopped_disconnected">%1$s disconnected — stopped</string>
+    <string name="toast_stopped_timeout">Stopped after %1$s min</string>
+    <string name="error_couldnt_play">Couldn\'t play %1$s</string>
+    <string name="error_couldnt_open_url">Couldn\'t open URL</string>
+    <string name="error_playback_failed">Playback error (what=%1$d, extra=%2$d)</string>
+
+    <plurals name="notification_listening">
+        <item quantity="one">%d rule active — listening for Bluetooth connections</item>
+        <item quantity="other">%d rules active — listening for Bluetooth connections</item>
+    </plurals>
+</resources>
