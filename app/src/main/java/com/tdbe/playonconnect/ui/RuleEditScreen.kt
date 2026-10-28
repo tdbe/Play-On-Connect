@@ -54,11 +54,14 @@ import com.tdbe.playonconnect.data.Rule
 import com.tdbe.playonconnect.data.RuleStore
 import com.tdbe.playonconnect.data.Trigger
 import com.tdbe.playonconnect.service.PlaybackService
+import com.tdbe.playonconnect.util.AudioInfo
 import com.tdbe.playonconnect.util.BluetoothUtil
 import com.tdbe.playonconnect.util.WebApps
+import com.tdbe.playonconnect.util.formatMinutes
 import com.tdbe.playonconnect.util.sanitizeDecimalInput
 import kotlinx.coroutines.launch
 import java.util.UUID
+import kotlin.math.floor
 
 private enum class ActionType { PLAY_SOUND, OPEN_URL }
 
@@ -116,6 +119,21 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
     var showBrowserPicker by rememberSaveable { mutableStateOf(false) }
     var showAppPicker by rememberSaveable { mutableStateOf(false) }
 
+    // When not looping, stop-after/fade must not exceed the actual content length.
+    fun clampToPlaylistLength() {
+        if (loop) return
+        val totalSec = AudioInfo.totalDurationSec(context, soundUris) ?: return
+        val maxAllowedMinutes = floor(totalSec / 60.0 * 100.0) / 100.0
+        val currentMax = sanitizeDecimalInput(soundMaxText).toDoubleOrNull()
+        if (currentMax != null && currentMax > maxAllowedMinutes) {
+            soundMaxText = formatMinutes(maxAllowedMinutes)
+        }
+        val effectiveSeconds =
+            sanitizeDecimalInput(soundMaxText).toDoubleOrNull()?.let { (it * 60).toLong() } ?: totalSec
+        val fade = fadeText.trim().toIntOrNull()
+        if (fade != null && fade > effectiveSeconds) fadeText = effectiveSeconds.toString()
+    }
+
     val soundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (!uris.isNullOrEmpty()) {
             uris.forEach { uri ->
@@ -127,6 +145,7 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
             soundNames = uris.map {
                 BluetoothUtil.fileDisplayName(context, it) ?: it.lastPathSegment ?: it.toString()
             }
+            clampToPlaylistLength()
         }
     }
 
@@ -284,7 +303,13 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                         Spacer(Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(R.string.loop_switch), Modifier.weight(1f))
-                            Switch(checked = loop, onCheckedChange = { loop = it })
+                            Switch(
+                                checked = loop,
+                                onCheckedChange = { value ->
+                                    loop = value
+                                    if (!value) clampToPlaylistLength()
+                                },
+                            )
                         }
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(

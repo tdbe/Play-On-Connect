@@ -4,10 +4,12 @@ import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.tdbe.playonconnect.data.AppSettings
 import com.tdbe.playonconnect.data.RuleStore
 
 class AppWakeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        AppSettings.init(context)
         RuleStore.init(context)
         if (RuleStore.rules.value.none { it.enabled }) return
         when (intent?.action) {

@@ -27,6 +27,8 @@
     <string name="label_sound">Sound</string>
     <string name="or_label">Or</string>
     <string name="undo_delete">Undo Delete</string>
+    <string name="parallel_title">Play in parallel to system media</string>
+    <string name="parallel_note">(if on, you can keep listening to e.g. white noise from this app, while also playing any media from other apps on your device)</string>
 
     <string name="title_add_rule">Add rule</string>
     <string name="title_edit_rule">Edit rule</string>
