@@ -17,9 +17,9 @@ object AppSettings {
         }
     }
 
-    /** When true, our playback neither steals audio focus nor gets stolen from. */
+    /** When true (default), our playback neither steals audio focus nor gets stolen from. */
     var playInParallel: Boolean
-        get() = prefs?.getBoolean(KEY_PLAY_IN_PARALLEL, false) ?: false
+        get() = prefs?.getBoolean(KEY_PLAY_IN_PARALLEL, true) ?: true
         set(value) {
             prefs?.edit()?.putBoolean(KEY_PLAY_IN_PARALLEL, value)?.apply()
         }
