@@ -1,8 +1,12 @@
-<img width="720" alt="tv_banner" src="https://github.com/user-attachments/assets/691b2d0a-e749-42cb-86f2-24dfdf8d0282" />
+<div align="center">
+<a href="https://github.com/tdbe/Play-On-Connect">
+  <img width="720" alt="tv_banner" src="https://github.com/user-attachments/assets/691b2d0a-e749-42cb-86f2-24dfdf8d0282" />
+</a>
+</div>
 
 <div align="center">
 <a href="https://github.com/tdbe/Play-On-Connect">
-  <img height="840" alt="Screenshot_202610254_Play On Connect" src="https://github.com/user-attachments/assets/6af972b8-0dc5-4879-a967-7fd24d087cbc" />
+  <img height="860" alt="Screenshot_202610254_Play On Connect" src="https://github.com/user-attachments/assets/6af972b8-0dc5-4879-a967-7fd24d087cbc" />
 </a>
 <a href="https://github.com/tdbe/Play-On-Connect">
   <img height="720" alt="Screenshot_202610137_Play On Connect" src="https://github.com/user-attachments/assets/816571d9-0037-4396-a966-e1389e7e9d68" />
