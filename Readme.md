@@ -1,6 +1,6 @@
 <div align="center">
 <a href="https://github.com/tdbe/Play-On-Connect">
-  <img width="840" alt="tv_banner" src="https://github.com/user-attachments/assets/691b2d0a-e749-42cb-86f2-24dfdf8d0282" />
+  <img width="800" alt="tv_banner" src="https://github.com/user-attachments/assets/691b2d0a-e749-42cb-86f2-24dfdf8d0282" />
 </a>
 </div>
 
