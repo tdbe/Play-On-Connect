@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
  */
 class RuleEngine(private val context: Context) {
 
+    private val BT_START_DELAY_MS = 3000L
+
     enum class Kind { SOUND, URL }
 
     private class Entry(
@@ -52,6 +54,10 @@ class RuleEngine(private val context: Context) {
     // without an intervening DISCONNECT (e.g. ACL + A2DP profile events).
     private var lastConnectedAddress: String? = null
 
+    // Delayed audio starts for Bluetooth-triggered rules (gives the speaker a
+    // moment to become ready), keyed by rule id.
+    private val pendingBtStarts = mutableMapOf<String, Runnable>()
+
     private var focusRequest: AudioFocusRequest? = null
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
@@ -70,7 +76,24 @@ class RuleEngine(private val context: Context) {
         }
         if (matches.isEmpty()) return
         stopOtherGroups(group)
-        matches.forEach { startEntry(it) }
+        matches.forEach { scheduleBtStart(it) }
+    }
+
+    private fun scheduleBtStart(rule: Rule) {
+        cancelPendingBtStart(rule.id)
+        val runnable = Runnable {
+            pendingBtStarts.remove(rule.id)
+            val fresh = RuleStore.rules.value.firstOrNull { it.id == rule.id }
+            if (fresh != null && fresh.enabled && !fresh.pendingDelete && !entries.containsKey(rule.id)) {
+                startEntry(fresh)
+            }
+        }
+        pendingBtStarts[rule.id] = runnable
+        handler.postDelayed(runnable, BT_START_DELAY_MS)
+    }
+
+    private fun cancelPendingBtStart(ruleId: String) {
+        pendingBtStarts.remove(ruleId)?.let { handler.removeCallbacks(it) }
     }
 
     fun handleDisconnected(address: String) {
@@ -195,6 +218,7 @@ class RuleEngine(private val context: Context) {
     private fun stopEntry(entry: Entry, message: String?) {
         when (entry.kind) {
             Kind.SOUND -> {
+                cancelPendingBtStart(entry.ruleId)
                 entry.stopMessage = message ?: context.getString(R.string.toast_stopped)
                 entry.controller?.stop() // finish callback removes the entry
             }
