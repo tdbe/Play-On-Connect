@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Play On Connect</string>
-    <string name="header_description">Create Rules to play an Action on an Event (Android 9+):\n- Triggers: on bluetooth device connected, on time ("alarm").\n- Actions: play music file(s), open a website url e.g. youtube.\n- Rules with the same bluetooth device play in parallel.\n All time based rules play in parallel (you can layer tracks with start offsets).</string>
+    <string name="header_description">Create Rules to play an Action on an Event (Android 9+):\n- Triggers: on bluetooth device connected, on time ("alarm").\n- Actions: play music file(s), open a website url e.g. youtube.\n- Rules with the same bluetooth device play in parallel.\n- All time based rules play in parallel (you can layer tracks with start offsets).</string>
 
     <string name="action_add_rule">Add rule</string>
     <string name="action_save">Save</string>
@@ -22,6 +22,7 @@
     <string name="summary_stops_after">Stops after %1$s min</string>
     <string name="summary_fades_over">fades over %1$d s</string>
     <string name="summary_files_count">%1$d files</string>
+    <string name="summary_files_selected">%1$d files selected</string>
     <string name="summary_mode_browser">In browser</string>
     <string name="summary_mode_dedicated">In app</string>
     <string name="label_sound">Sound</string>

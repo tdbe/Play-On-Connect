@@ -2,6 +2,7 @@ package com.tdbe.playonconnect.ui
 
 import android.Manifest
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -41,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -58,6 +60,8 @@ import com.tdbe.playonconnect.util.AudioInfo
 import com.tdbe.playonconnect.util.BluetoothUtil
 import com.tdbe.playonconnect.util.TimeSpec
 import com.tdbe.playonconnect.util.WebApps
+import com.tdbe.playonconnect.util.clampName
+import com.tdbe.playonconnect.util.clampedFileNames
 import com.tdbe.playonconnect.util.formatMinutes
 import com.tdbe.playonconnect.util.sanitizeDecimalInput
 import kotlinx.coroutines.launch
@@ -71,6 +75,8 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val existing = rules.find { it.id == ruleId }
+
+    BackHandler { onDone() }
 
     var actionType by rememberSaveable(existing?.id) {
         mutableStateOf(if (existing?.action is Action.OpenUrl) ActionType.OPEN_URL else ActionType.PLAY_SOUND)
@@ -342,16 +348,17 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                             label = { Text(stringResource(R.string.action_type_open_url)) },
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     if (actionType == ActionType.PLAY_SOUND) {
                         OutlinedButton(onClick = {
                             soundPicker.launch(arrayOf("audio/*", "application/ogg", "application/x-ogg"))
-                        }) {
+                        }, shape = RectangleShape) {
                             val label = when {
                                 soundNames.isEmpty() -> stringResource(R.string.choose_sound)
-                                soundNames.size == 1 -> soundNames[0]
-                                else -> stringResource(R.string.summary_files_count, soundNames.size)
+                                soundNames.size == 1 -> clampName(soundNames[0], 256)
+                                else -> stringResource(R.string.summary_files_selected, soundNames.size) +
+                                    ": " + clampedFileNames(soundNames)
                             }
                             Text(label)
                         }
@@ -366,7 +373,7 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                                 },
                             )
                         }
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = soundMaxText,
                             onValueChange = { raw ->
@@ -380,6 +387,8 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                                         fadeText = seconds.toString()
                                     }
                                 }
+                                // When not looping, also cap stop-after itself to the content length.
+                                clampToPlaylistLength()
                             },
                             label = { Text(stringResource(R.string.max_minutes_label)) },
                             placeholder = { Text(stringResource(R.string.max_minutes_placeholder)) },

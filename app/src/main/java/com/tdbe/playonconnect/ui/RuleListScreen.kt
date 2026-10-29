@@ -34,8 +34,12 @@ import com.tdbe.playonconnect.data.Action
 import com.tdbe.playonconnect.data.Rule
 import com.tdbe.playonconnect.data.Trigger
 import com.tdbe.playonconnect.util.BluetoothUtil
+import com.tdbe.playonconnect.util.clampName
+import com.tdbe.playonconnect.util.clampedFileNames
 import com.tdbe.playonconnect.util.formatMinutes
 import android.net.Uri
+import com.tdbe.playonconnect.util.formatFileList
+import com.tdbe.playonconnect.util.truncateName
 
 @Composable
 fun RuleListScreen(
@@ -144,12 +148,23 @@ private fun RuleCard(
 private fun PlaySoundSummary(action: Action.PlaySound) {
     val context = LocalContext.current
     val names = action.effectiveNames
-    val label = when {
-        names.size == 1 -> names[0]
-        names.size > 1 -> stringResource(R.string.summary_files_count, action.effectiveUris.size)
-        else -> stringResource(R.string.label_sound)
+    if (names.size <= 1) {
+        Text(
+            names.firstOrNull()?.let { clampName(it, 256) } ?: stringResource(R.string.label_sound),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    } else {
+        Text(
+            stringResource(R.string.summary_files_selected, names.size),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            clampedFileNames(names),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
-    Text(label, style = MaterialTheme.typography.bodyMedium)
     Spacer(Modifier.height(4.dp))
     val summary = buildString {
         append(stringResource(if (action.loop) R.string.summary_loops else R.string.summary_plays_once))
@@ -178,10 +193,8 @@ private fun PlaySoundSummary(action: Action.PlaySound) {
 @Composable
 private fun OpenUrlSummary(action: Action.OpenUrl) {
     Text(
-        action.url,
+        clampName(action.url, 256),
         style = MaterialTheme.typography.bodyMedium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
     )
     Spacer(Modifier.height(4.dp))
     val summary = buildString {
