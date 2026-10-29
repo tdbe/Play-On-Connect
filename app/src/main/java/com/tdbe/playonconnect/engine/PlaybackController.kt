@@ -2,8 +2,6 @@ package com.tdbe.playonconnect.engine
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -11,21 +9,16 @@ import android.os.Looper
 import android.os.PowerManager
 import com.tdbe.playonconnect.R
 import com.tdbe.playonconnect.data.Action
-import com.tdbe.playonconnect.data.AppSettings
 import com.tdbe.playonconnect.util.AudioInfo
 
+/**
+ * A single playback instance (one rule's playlist) with its own timeout,
+ * fade schedule and wake lock. Audio focus is managed by the RuleEngine.
+ */
 class PlaybackController(private val context: Context) {
 
     private val handler = Handler(Looper.getMainLooper())
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-    private var audioFocusRequest: AudioFocusRequest? = null
-    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            stop()
-        }
-    }
 
     private var player: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -56,7 +49,6 @@ class PlaybackController(private val context: Context) {
             return
         }
 
-        requestAudioFocusIfNeeded()
         acquireWakeLock(action.maxMinutes)
         val totalSec = effectiveTotalSeconds(action)
         if (totalSec != null) {
@@ -71,6 +63,10 @@ class PlaybackController(private val context: Context) {
         }
     }
 
+    fun stop() {
+        finishInternal(null, false)
+    }
+
     /**
      * Effective playback window in seconds; null when there is no stop-after.
      * When not looping, clamped down to the actual content duration.
@@ -80,10 +76,6 @@ class PlaybackController(private val context: Context) {
         if (action.loop) return maxSec
         val contentSec = AudioInfo.totalDurationSec(context, playlist.map { it.toString() })
         return if (contentSec != null && contentSec > 0L) minOf(maxSec, contentSec) else maxSec
-    }
-
-    fun stop() {
-        finishInternal(null, false)
     }
 
     /**
@@ -107,33 +99,9 @@ class PlaybackController(private val context: Context) {
         handler.postDelayed(starter, startDelayMs)
     }
 
-    /** Sum of the durations of all playlist files; null if any duration is unknown. */
+    /** Sum of the durations of all playlist files in ms; null if any duration is unknown. */
     private fun playlistDurationMs(): Long? =
         AudioInfo.totalDurationSec(context, playlist.map { it.toString() })?.let { it * 1000L }
-
-    /**
-     * In exclusive mode (parallel playback off) we take audio focus so other
-     * apps pause; in parallel mode we take none and simply mix.
-     */
-    private fun requestAudioFocusIfNeeded() {
-        if (AppSettings.playInParallel) return
-        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(mediaAttributes())
-            .setOnAudioFocusChangeListener(focusListener)
-            .build()
-        runCatching { audioManager.requestAudioFocus(request) }
-        audioFocusRequest = request
-    }
-
-    private fun abandonAudioFocus() {
-        audioFocusRequest?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
-        audioFocusRequest = null
-    }
-
-    private fun mediaAttributes() = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-        .build()
 
     private fun playCurrentTrack(): Boolean {
         releasePlayer()
@@ -141,12 +109,7 @@ class PlaybackController(private val context: Context) {
         val track = playlist[index]
         val mp = MediaPlayer()
         return try {
-            mp.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
+            mp.setAudioAttributes(mediaAttributes())
             mp.setDataSource(context, track)
             mp.isLooping = looping && playlist.size == 1
             mp.setOnCompletionListener { onTrackCompleted() }
@@ -196,7 +159,6 @@ class PlaybackController(private val context: Context) {
         timeoutRunnable = null
         fadeRunnables.forEach { handler.removeCallbacks(it) }
         fadeRunnables.clear()
-        abandonAudioFocus()
         releasePlayer()
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
@@ -220,4 +182,9 @@ class PlaybackController(private val context: Context) {
         }
         wakeLock = wl
     }
+
+    private fun mediaAttributes() = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
 }

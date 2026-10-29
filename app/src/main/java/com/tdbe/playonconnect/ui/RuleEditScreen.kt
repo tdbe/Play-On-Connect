@@ -56,6 +56,7 @@ import com.tdbe.playonconnect.data.Trigger
 import com.tdbe.playonconnect.service.PlaybackService
 import com.tdbe.playonconnect.util.AudioInfo
 import com.tdbe.playonconnect.util.BluetoothUtil
+import com.tdbe.playonconnect.util.TimeSpec
 import com.tdbe.playonconnect.util.WebApps
 import com.tdbe.playonconnect.util.formatMinutes
 import com.tdbe.playonconnect.util.sanitizeDecimalInput
@@ -73,6 +74,13 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
 
     var actionType by rememberSaveable(existing?.id) {
         mutableStateOf(if (existing?.action is Action.OpenUrl) ActionType.OPEN_URL else ActionType.PLAY_SOUND)
+    }
+
+    var triggerIsTime by rememberSaveable(existing?.id) {
+        mutableStateOf(existing?.trigger is Trigger.TimeEvent)
+    }
+    var timeSpec by rememberSaveable(existing?.id) {
+        mutableStateOf((existing?.trigger as? Trigger.TimeEvent)?.spec ?: "")
     }
 
     // Play-sound fields
@@ -164,7 +172,9 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
     // Fade is meaningless (and hidden) for endless looping without a stop time.
     val fadeVisible = !(loop && soundMax == null)
 
-    val valid = deviceAddress != null && when (actionType) {
+    val timeSpecValid = TimeSpec.parse(timeSpec) != null
+
+    val valid = (if (triggerIsTime) timeSpecValid else deviceAddress != null) && when (actionType) {
         ActionType.PLAY_SOUND -> soundUris.isNotEmpty()
 
         ActionType.OPEN_URL ->
@@ -226,10 +236,15 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                             maxMinutes = urlMax,
                         )
                     }
+                    val trigger: Trigger = if (triggerIsTime) {
+                        Trigger.TimeEvent(timeSpec.trim())
+                    } else {
+                        Trigger.BluetoothDeviceConnected(deviceAddress!!, deviceName)
+                    }
                     val rule = Rule(
                         id = existing?.id ?: UUID.randomUUID().toString(),
                         enabled = existing?.enabled ?: true,
-                        trigger = Trigger.BluetoothDeviceConnected(deviceAddress!!, deviceName),
+                        trigger = trigger,
                         action = action,
                     )
                     scope.launch {
@@ -257,11 +272,51 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Spacer(Modifier.height(4.dp))
-                    Text(stringResource(R.string.trigger_type_bluetooth), style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { showDevicePicker = true }) {
-                        Text(deviceName ?: deviceAddress ?: stringResource(R.string.no_device_selected))
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.Start,
+                    ) {
+                        FilterChip(
+                            selected = !triggerIsTime,
+                            onClick = { triggerIsTime = false },
+                            label = { Text(stringResource(R.string.trigger_type_bluetooth)) },
+                        )
+                        Text(stringResource(R.string.or_label), style = MaterialTheme.typography.bodySmall)
+                        FilterChip(
+                            selected = triggerIsTime,
+                            onClick = {
+                                triggerIsTime = true
+                                if (timeSpec.isBlank()) timeSpec = TimeSpec.defaultSpec()
+                            },
+                            label = { Text(stringResource(R.string.trigger_type_time_event)) },
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (!triggerIsTime) {
+                        OutlinedButton(onClick = { showDevicePicker = true }) {
+                            Text(deviceName ?: deviceAddress ?: stringResource(R.string.no_device_selected))
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = timeSpec,
+                            onValueChange = { timeSpec = it },
+                            label = { Text(stringResource(R.string.time_spec_label)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(
+                                if (timeSpecValid) R.string.time_spec_hint else R.string.time_spec_invalid
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (timeSpecValid) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        )
                     }
                 }
             }
@@ -274,7 +329,7 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
                         FilterChip(
                             selected = actionType == ActionType.PLAY_SOUND,
                             onClick = { actionType = ActionType.PLAY_SOUND },

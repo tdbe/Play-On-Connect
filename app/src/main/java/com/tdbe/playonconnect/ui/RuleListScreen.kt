@@ -40,11 +40,11 @@ import android.net.Uri
 @Composable
 fun RuleListScreen(
     rules: List<Rule>,
-    playingRuleId: String?,
+    playingRuleIds: Set<String>,
     headerContent: @Composable () -> Unit,
     onEdit: (Rule) -> Unit,
     onToggle: (Rule, Boolean) -> Unit,
-    onStop: () -> Unit,
+    onStop: (String) -> Unit,
     onDelete: (Rule) -> Unit,
     onCopy: (Rule) -> Unit,
 ) {
@@ -69,10 +69,10 @@ fun RuleListScreen(
             items(rules, key = { it.id }) { rule ->
                 RuleCard(
                     rule = rule,
-                    isPlaying = playingRuleId == rule.id,
+                    isPlaying = playingRuleIds.contains(rule.id),
                     onEdit = { onEdit(rule) },
                     onToggle = { enabled -> onToggle(rule, enabled) },
-                    onStop = onStop,
+                    onStop = { onStop(rule.id) },
                     onDelete = { onDelete(rule) },
                     onCopy = { onCopy(rule) },
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -94,14 +94,17 @@ private fun RuleCard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val trigger = rule.trigger as? Trigger.BluetoothDeviceConnected
 
     Card(modifier.fillMaxWidth().clickable(onClick = onEdit)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        trigger?.deviceName ?: trigger?.deviceAddress ?: stringResource(R.string.no_device_selected),
+                        when (val trigger = rule.trigger) {
+                            is Trigger.BluetoothDeviceConnected ->
+                                trigger.deviceName ?: trigger.deviceAddress
+                            is Trigger.TimeEvent -> trigger.spec
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -111,13 +114,21 @@ private fun RuleCard(
                         is Action.OpenUrl -> OpenUrlSummary(action)
                     }
                 }
-                IconButton(onClick = onCopy) {
-                    Icon(painterResource(R.drawable.ic_copy), contentDescription = stringResource(R.string.action_copy))
+                Column() {
+                    Switch(checked = rule.enabled, onCheckedChange = onToggle)
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            painterResource(R.drawable.ic_delete),
+                            contentDescription = stringResource(R.string.action_delete)
+                        )
+                    }
+                    IconButton(onClick = onCopy) {
+                        Icon(
+                            painterResource(R.drawable.ic_copy),
+                            contentDescription = stringResource(R.string.action_copy)
+                        )
+                    }
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(painterResource(R.drawable.ic_delete), contentDescription = stringResource(R.string.action_delete))
-                }
-                Switch(checked = rule.enabled, onCheckedChange = onToggle)
             }
             if (isPlaying) {
                 Spacer(Modifier.height(8.dp))

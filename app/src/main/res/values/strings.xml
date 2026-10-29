@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Play On Connect</string>
-    <string name="header_description">Create Rules to play an Action on an Event (Android 9+):\n- play music file(s) when a bluetooth device is connected.\n- open a website url e.g. youtube when a bluetooth device is connected.</string>
+    <string name="header_description">Create Rules to play an Action on an Event (Android 9+):\n- Triggers: on bluetooth device connected, on time ("alarm").\n- Actions: play music file(s), open a website url e.g. youtube.\n- Rules with the same bluetooth device play in parallel.\n All time based rules play in parallel (you can layer tracks with start offsets).</string>
 
     <string name="action_add_rule">Add rule</string>
     <string name="action_save">Save</string>
@@ -30,12 +30,16 @@
     <string name="parallel_title">Play in parallel to system media</string>
     <string name="parallel_note">(if on, you can keep listening to e.g. white noise from this app, while also playing any media from other apps on your device)</string>
 
-    <string name="title_add_rule">Add rule</string>
-    <string name="title_edit_rule">Edit rule</string>
+    <string name="title_add_rule">Add Rule</string>
+    <string name="title_edit_rule">Edit Rule</string>
     <string name="section_trigger">Trigger</string>
     <string name="section_action">Action</string>
-    <string name="trigger_type_bluetooth">On Bluetooth device connected</string>
-    <string name="action_type_play_sound">Play sound</string>
+    <string name="trigger_type_bluetooth">Bluetooth Device Connected</string>
+    <string name="trigger_type_time_event">Time Event</string>
+    <string name="time_spec_label">Time (24h)</string>
+    <string name="time_spec_hint">hh:mm:ss repeat:Mo,Tu,We,Th,Fr,Sa,Su — omit \"repeat:\" to play once</string>
+    <string name="time_spec_invalid">Invalid format. Use e.g. 07:30:00 repeat:Mo,Fr</string>
+    <string name="action_type_play_sound">Play Sound file(s)</string>
     <string name="action_type_open_url">Open URL</string>
 
     <string name="pick_device">Select Bluetooth device</string>
@@ -45,8 +49,8 @@
     <string name="badge_connected">Connected</string>
 
     <string name="choose_sound">Choose sound file(s)</string>
-    <string name="loop_switch">Loop playback until Stop</string>
-    <string name="max_minutes_label">Stop after (minutes) (0 = don\'t stop)</string>
+    <string name="loop_switch">Loop until Stop</string>
+    <string name="max_minutes_label">Stop after (minutes) (0 = until end)</string>
     <string name="max_minutes_placeholder">No limit</string>
     <string name="fade_seconds_label">Fade out over (seconds)</string>
     <string name="fade_seconds_placeholder">No fade</string>
@@ -71,11 +75,12 @@
     <string name="perm_notifications_granted">Notification permission granted</string>
     <string name="perm_overlay_grant">Grant overlay permission</string>
     <string name="perm_overlay_granted">Overlay permission granted</string>
-    <string name="perm_overlay_note">↳ Optional; use if some app features don\'t work in the background autonomously - the opening of URLs is a Foreground Action and requires this permission on most devices (unless the app is somehow active).</string>
+    <string name="perm_overlay_note">↪ Optional; use if some app features don\'t work in the background autonomously - the opening of URLs is a Foreground Action and requires this permission on most devices (unless the app is somehow active).</string>
 
     <string name="notification_channel_name">Rule monitoring</string>
     <string name="notification_channel_desc">Shows when Play On Connect is listening for Bluetooth devices</string>
     <string name="notification_playing">Playing: %1$s</string>
+    <string name="notification_playing_count">%1$d sounds playing</string>
 
     <string name="toast_playing">Playing: %1$s</string>
     <string name="toast_opening_url">Opening: %1$s</string>

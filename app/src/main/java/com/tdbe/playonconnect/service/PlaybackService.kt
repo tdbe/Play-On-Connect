@@ -13,10 +13,13 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.tdbe.playonconnect.MainActivity
 import com.tdbe.playonconnect.R
+import com.tdbe.playonconnect.data.Rule
 import com.tdbe.playonconnect.data.RuleStore
+import com.tdbe.playonconnect.data.Trigger
 import com.tdbe.playonconnect.engine.BluetoothMonitor
 import com.tdbe.playonconnect.engine.PlaybackState
 import com.tdbe.playonconnect.engine.RuleEngine
+import com.tdbe.playonconnect.util.TimeSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,9 +35,12 @@ class PlaybackService : Service() {
 
         const val ACTION_START = "com.tdbe.playonconnect.action.START"
         const val ACTION_STOP_PLAYBACK = "com.tdbe.playonconnect.action.STOP_PLAYBACK"
+        const val ACTION_STOP_ALL = "com.tdbe.playonconnect.action.STOP_ALL"
+        const val ACTION_TIME_EVENT = TimeEventReceiver.ACTION_TIME_EVENT
 
         private const val EXTRA_ADDRESS = "extra_address"
         private const val EXTRA_CONNECTED = "extra_connected"
+        private const val EXTRA_STOP_RULE = "extra_stop_rule"
 
         @Volatile
         var isRunning: Boolean = false
@@ -48,6 +54,11 @@ class PlaybackService : Service() {
                 )
             }
         }
+
+        fun timeEventIntent(context: Context, ruleId: String): Intent =
+            Intent(context, PlaybackService::class.java)
+                .setAction(ACTION_TIME_EVENT)
+                .putExtra(TimeScheduler.EXTRA_RULE_ID, ruleId)
 
         // Used by the manifest-declared fallback receiver: wakes/keeps the
         // service running and forwards a connection event in case the
@@ -64,10 +75,12 @@ class PlaybackService : Service() {
             }
         }
 
-        fun stopPlayback(context: Context) {
+        fun stopPlayback(context: Context, ruleId: String) {
             if (!isRunning) return
             context.startService(
-                Intent(context, PlaybackService::class.java).setAction(ACTION_STOP_PLAYBACK)
+                Intent(context, PlaybackService::class.java)
+                    .setAction(ACTION_STOP_PLAYBACK)
+                    .putExtra(EXTRA_STOP_RULE, ruleId)
             )
         }
     }
@@ -77,8 +90,7 @@ class PlaybackService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var commandSeen = false
 
-    private fun List<com.tdbe.playonconnect.data.Rule>.activeCount(): Int =
-        count { it.enabled && !it.pendingDelete }
+    private fun List<Rule>.activeCount(): Int = count { it.enabled && !it.pendingDelete }
 
     override fun onCreate() {
         super.onCreate()
@@ -90,12 +102,13 @@ class PlaybackService : Service() {
             if (connected) engine.handleConnected(address) else engine.handleDisconnected(address)
         }
         isRunning = true
+        TimeScheduler.rescheduleAll(this)
         scope.launch {
-            combine(RuleStore.rules, PlaybackState.current) { rules, playing -> rules to playing }
+            combine(RuleStore.rules, PlaybackState.playing) { rules, playing -> rules to playing }
                 .collect { (rules, playing) ->
                     engine.handleRulesChanged(rules)
-                    val enabledCount = rules.activeCount()
-                    if (enabledCount == 0) {
+                    TimeScheduler.rescheduleAll(this@PlaybackService)
+                    if (rules.activeCount() == 0) {
                         if (commandSeen) {
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf()
@@ -110,14 +123,23 @@ class PlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         commandSeen = true
-        startForeground(NOTIFICATION_ID, buildNotification(RuleStore.rules.value, PlaybackState.current.value))
-        if (intent?.action == ACTION_STOP_PLAYBACK) engine.stopCurrent()
-        val forwardedAddress = intent?.getStringExtra(EXTRA_ADDRESS)
-        if (forwardedAddress != null && intent.hasExtra(EXTRA_CONNECTED)) {
-            if (intent.getBooleanExtra(EXTRA_CONNECTED, false)) {
-                engine.handleConnected(forwardedAddress)
-            } else {
-                engine.handleDisconnected(forwardedAddress)
+        startForeground(NOTIFICATION_ID, buildNotification(RuleStore.rules.value, PlaybackState.playing.value))
+        when (intent?.action) {
+            ACTION_STOP_PLAYBACK -> {
+                val ruleId = intent.getStringExtra(EXTRA_STOP_RULE)
+                if (ruleId != null) engine.stopRule(ruleId) else engine.stopAll()
+            }
+
+            ACTION_STOP_ALL -> engine.stopAll()
+
+            ACTION_TIME_EVENT -> {
+                val ruleId = intent.getStringExtra(TimeScheduler.EXTRA_RULE_ID)
+                if (ruleId != null) {
+                    val rule = RuleStore.rules.value.firstOrNull { it.id == ruleId }
+                    val repeats = (rule?.trigger as? Trigger.TimeEvent)?.let { TimeSpec.repeats(it.spec) } ?: false
+                    engine.handleTimeEvent(ruleId)
+                    TimeScheduler.onFired(ruleId, repeats)
+                }
             }
         }
         if (RuleStore.rules.value.activeCount() == 0) {
@@ -146,10 +168,7 @@ class PlaybackService : Service() {
         NotificationManagerCompat.from(this).createNotificationChannel(channel)
     }
 
-    private fun buildNotification(
-        rules: List<com.tdbe.playonconnect.data.Rule>,
-        playing: PlaybackState.Playing?,
-    ): Notification {
+    private fun buildNotification(rules: List<Rule>, playing: Map<String, String>): Notification {
         val contentIntent = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -160,11 +179,16 @@ class PlaybackService : Service() {
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-        if (playing != null) {
-            builder.setContentText(getString(R.string.notification_playing, playing.label))
+        if (playing.isNotEmpty()) {
+            val text = if (playing.size == 1) {
+                getString(R.string.notification_playing, playing.values.first())
+            } else {
+                getString(R.string.notification_playing_count, playing.size)
+            }
+            builder.setContentText(text)
             val stopIntent = PendingIntent.getService(
                 this, 1,
-                Intent(this, PlaybackService::class.java).setAction(ACTION_STOP_PLAYBACK),
+                Intent(this, PlaybackService::class.java).setAction(ACTION_STOP_ALL),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             builder.addAction(0, getString(R.string.action_stop), stopIntent)

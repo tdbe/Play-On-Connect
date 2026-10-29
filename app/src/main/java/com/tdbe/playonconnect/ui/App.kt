@@ -83,7 +83,7 @@ fun App() {
     var editingRuleId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val rules by RuleStore.rules.collectAsState()
-    val playing by PlaybackState.current.collectAsState()
+    val playing by PlaybackState.playing.collectAsState()
     val pendingEntries by PendingDelete.entries.collectAsState()
     val resumeTick by MainActivity.resumeCount.collectAsState()
 
@@ -139,7 +139,7 @@ fun App() {
                 } else {
                     RuleListScreen(
                         rules = displayRules,
-                        playingRuleId = playing?.ruleId,
+                        playingRuleIds = playing.keys,
                         headerContent = {
                             Column {
                                 val maxBannerHeight = LocalConfiguration.current.screenHeightDp.dp * 0.3f
@@ -187,7 +187,7 @@ fun App() {
                                 if (enabled && !PlaybackService.isRunning) PlaybackService.start(context)
                             }
                         },
-                        onStop = { PlaybackService.stopPlayback(context) },
+                        onStop = { ruleId -> PlaybackService.stopPlayback(context, ruleId) },
                         onDelete = { rule -> scope.launch { PendingDelete.begin(rule.id) } },
                         onCopy = { rule ->
                             scope.launch {

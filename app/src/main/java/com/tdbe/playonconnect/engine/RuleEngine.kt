@@ -1,6 +1,8 @@
 package com.tdbe.playonconnect.engine
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
@@ -9,72 +11,119 @@ import android.view.KeyEvent
 import android.widget.Toast
 import com.tdbe.playonconnect.R
 import com.tdbe.playonconnect.data.Action
+import com.tdbe.playonconnect.data.AppSettings
 import com.tdbe.playonconnect.data.Rule
 import com.tdbe.playonconnect.data.RuleStore
 import com.tdbe.playonconnect.data.Trigger
+import com.tdbe.playonconnect.util.TimeSpec
 import com.tdbe.playonconnect.util.WebApps
 import com.tdbe.playonconnect.util.formatMinutes
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
+/**
+ * Runs rules. Rules in the same trigger group (same Bluetooth device, or all
+ * time events) play in parallel with their own player instances; starting a
+ * rule from one group stops everything playing from other groups.
+ */
 class RuleEngine(private val context: Context) {
 
-    private enum class Kind { NONE, SOUND, URL }
+    enum class Kind { SOUND, URL }
 
-    private val controller = PlaybackController(context)
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private class Entry(
+        val ruleId: String,
+        val groupKey: String,
+        val kind: Kind,
+        val label: String,
+        val maxMinutes: Double?,
+        val controller: PlaybackController?,
+        var timeoutRunnable: Runnable?,
+        var stopMessage: String? = null,
+    )
+
     private val handler = Handler(Looper.getMainLooper())
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val entries = mutableMapOf<String, Entry>()
 
     // Deduplicate repeated CONNECT broadcasts for the same device that arrive
     // without an intervening DISCONNECT (e.g. ACL + A2DP profile events).
     private var lastConnectedAddress: String? = null
-    private var pendingStopToast: String? = null
-    private var kind = Kind.NONE
-    private var urlTimeoutRunnable: Runnable? = null
+
+    private var focusRequest: AudioFocusRequest? = null
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+            stopAllSounds()
+        }
+    }
+
+    fun isPlaying(ruleId: String): Boolean = entries.containsKey(ruleId)
 
     fun handleConnected(address: String) {
         if (lastConnectedAddress?.equals(address, ignoreCase = true) == true) return
         lastConnectedAddress = address
-        val rule = RuleStore.rules.value.firstOrNull {
-            it.enabled && !it.pendingDelete &&
-                it.triggerDeviceAddress()?.equals(address, ignoreCase = true) == true
-        } ?: return
-        startRule(rule)
+        val group = btGroup(address)
+        val matches = RuleStore.rules.value.filter {
+            it.enabled && !it.pendingDelete && it.triggerDeviceAddress()?.equals(address, ignoreCase = true) == true
+        }
+        if (matches.isEmpty()) return
+        stopOtherGroups(group)
+        matches.forEach { startEntry(it) }
     }
 
     fun handleDisconnected(address: String) {
         if (lastConnectedAddress?.equals(address, ignoreCase = true) == true) lastConnectedAddress = null
-        val playing = PlaybackState.current.value ?: return
-        val rule = RuleStore.rules.value.firstOrNull { it.id == playing.ruleId } ?: return
-        if (rule.triggerDeviceAddress()?.equals(address, ignoreCase = true) == true) {
-            val name = (rule.trigger as? Trigger.BluetoothDeviceConnected)?.deviceName ?: address
-            pendingStopToast = context.getString(R.string.toast_stopped_disconnected, name)
-            stopCurrent()
-        }
+        val group = btGroup(address)
+        val affected = entries.values.filter { it.groupKey == group }
+        if (affected.isEmpty()) return
+        val name = affected.firstNotNullFoundDeviceName() ?: address
+        val message = context.getString(R.string.toast_stopped_disconnected, name)
+        affected.forEach { stopEntry(it, message) }
+    }
+
+    fun handleTimeEvent(ruleId: String) {
+        val rule = RuleStore.rules.value.firstOrNull {
+            it.id == ruleId && it.enabled && !it.pendingDelete && it.trigger is Trigger.TimeEvent
+        } ?: return
+        stopOtherGroups(TIME_GROUP)
+        startEntry(rule)
     }
 
     fun handleRulesChanged(rules: List<Rule>) {
-        val playing = PlaybackState.current.value ?: return
-        val rule = rules.firstOrNull { it.id == playing.ruleId }
-        if (rule == null || !rule.enabled || rule.pendingDelete) stopCurrent()
+        entries.values.toList().forEach { entry ->
+            val rule = rules.firstOrNull { it.id == entry.ruleId }
+            if (rule == null || !rule.enabled || rule.pendingDelete) {
+                stopEntry(entry, context.getString(R.string.toast_stopped))
+            }
+        }
     }
 
-    fun stopCurrent() {
-        when (kind) {
-            Kind.SOUND -> controller.stop()
-            Kind.URL -> stopUrlPlayback(toastMessage = true)
-            Kind.NONE -> pendingStopToast = null
+    fun stopRule(ruleId: String) {
+        entries[ruleId]?.let { stopEntry(it, context.getString(R.string.toast_stopped)) }
+    }
+
+    fun stopAll() {
+        entries.values.toList().forEach { stopEntry(it, context.getString(R.string.toast_stopped)) }
+    }
+
+    private fun stopAllSounds() {
+        entries.values.filter { it.kind == Kind.SOUND }.toList().forEach {
+            stopEntry(it, context.getString(R.string.toast_stopped))
         }
     }
 
     fun shutdown() {
-        controller.stop()
-        cancelUrlTimeout()
-        kind = Kind.NONE
-        pendingStopToast = null
-        PlaybackState.current.value = null
+        entries.values.toList().forEach { stopEntry(it, null) }
+        entries.clear()
+        syncPlaying()
+        abandonAudioFocus()
     }
 
-    private fun startRule(rule: Rule) {
-        stopCurrent()
+    // ---------------------------------------------------------------- start
+
+    private fun startEntry(rule: Rule) {
         when (val action = rule.action) {
             is Action.PlaySound -> startSound(rule, action)
             is Action.OpenUrl -> startUrl(rule, action)
@@ -83,61 +132,146 @@ class RuleEngine(private val context: Context) {
 
     private fun startSound(rule: Rule, action: Action.PlaySound) {
         val label = soundLabel(action)
-        kind = Kind.SOUND
-        PlaybackState.current.value = PlaybackState.Playing(rule.id, label)
+        val controller = PlaybackController(context)
+        val entry = Entry(
+            ruleId = rule.id,
+            groupKey = groupKeyOf(rule),
+            kind = Kind.SOUND,
+            label = label,
+            maxMinutes = action.maxMinutes,
+            controller = controller,
+            timeoutRunnable = null,
+        )
+        entries[rule.id] = entry
+        syncPlaying()
+        acquireAudioFocusIfNeeded()
         Log.d(TAG, "Rule ${rule.id} triggered: playing $label")
         toast(context.getString(R.string.toast_playing, label))
         controller.start(action) { error, timedOut ->
-            if (PlaybackState.current.value?.ruleId == rule.id) {
-                PlaybackState.current.value = null
-                kind = Kind.NONE
-            }
+            val current = entries.remove(rule.id) ?: return@start
             val message = when {
                 error != null -> error
-                timedOut -> context.getString(
-                    R.string.toast_stopped_timeout,
-                    formatMinutes(action.maxMinutes ?: 0.0),
-                )
-                else -> pendingStopToast ?: context.getString(R.string.toast_stopped)
+                timedOut -> timeoutMessage(current)
+                else -> current.stopMessage ?: context.getString(R.string.toast_stopped)
             }
-            pendingStopToast = null
+            syncPlaying()
+            abandonAudioFocusIfIdle()
             toast(message)
+            disableIfOneTime(rule)
         }
     }
 
     private fun startUrl(rule: Rule, action: Action.OpenUrl) {
-        kind = Kind.URL
-        PlaybackState.current.value = PlaybackState.Playing(rule.id, action.url)
+        val entry = Entry(
+            ruleId = rule.id,
+            groupKey = groupKeyOf(rule),
+            kind = Kind.URL,
+            label = action.url,
+            maxMinutes = action.maxMinutes,
+            controller = null,
+            timeoutRunnable = null,
+        )
+        entries[rule.id] = entry
+        syncPlaying()
         Log.d(TAG, "Rule ${rule.id} triggered: opening ${action.url}")
         toast(context.getString(R.string.toast_opening_url, action.url))
         val pkg = (if (action.useDedicatedApp) action.appPackage else action.browserPackage)
             ?.takeIf { it.isNotBlank() }
         val opened = WebApps.open(context, action.url, pkg)
         if (!opened) {
+            entries.remove(rule.id)
+            syncPlaying()
             toast(context.getString(R.string.error_couldnt_open_url))
-            PlaybackState.current.value = null
-            kind = Kind.NONE
+            disableIfOneTime(rule)
             return
         }
         action.maxMinutes?.let { minutes ->
-            urlTimeoutRunnable = Runnable {
-                pendingStopToast = context.getString(R.string.toast_stopped_timeout, formatMinutes(minutes))
-                stopUrlPlayback(toastMessage = true)
+            entry.timeoutRunnable = Runnable {
+                stopEntry(entry, timeoutMessage(entry))
             }.also { handler.postDelayed(it, (minutes * 60_000).toLong()) }
         }
     }
 
-    private fun stopUrlPlayback(toastMessage: Boolean) {
-        cancelUrlTimeout()
-        dispatchMediaPause()
-        val message = pendingStopToast ?: context.getString(R.string.toast_stopped)
-        pendingStopToast = null
-        PlaybackState.current.value = null
-        kind = Kind.NONE
-        if (toastMessage) toast(message)
+    private fun stopEntry(entry: Entry, message: String?) {
+        when (entry.kind) {
+            Kind.SOUND -> {
+                entry.stopMessage = message ?: context.getString(R.string.toast_stopped)
+                entry.controller?.stop() // finish callback removes the entry
+            }
+
+            Kind.URL -> {
+                if (entries.remove(entry.ruleId) == null) return
+                entry.timeoutRunnable?.let { handler.removeCallbacks(it) }
+                dispatchMediaPause()
+                syncPlaying()
+                val rule = RuleStore.rules.value.firstOrNull { it.id == entry.ruleId }
+                if (message != null) toast(message)
+                if (rule != null) disableIfOneTime(rule)
+            }
+        }
     }
 
-    /** Sends a media-pause key event so whatever is playing (e.g. in a browser) pauses. */
+    /** Disables one-time (non-repeating) time-event rules once they have stopped. */
+    private fun disableIfOneTime(rule: Rule) {
+        val trigger = rule.trigger as? Trigger.TimeEvent ?: return
+        if (TimeSpec.repeats(trigger.spec)) return
+        scope.launch { RuleStore.setEnabled(rule.id, false) }
+    }
+
+    // -------------------------------------------------------------- groups
+
+    private fun stopOtherGroups(group: String) {
+        entries.values.filter { it.groupKey != group }.toList().forEach {
+            stopEntry(it, context.getString(R.string.toast_stopped))
+        }
+    }
+
+    private fun groupKeyOf(rule: Rule): String = when (val trigger = rule.trigger) {
+        is Trigger.BluetoothDeviceConnected -> btGroup(trigger.deviceAddress)
+        is Trigger.TimeEvent -> TIME_GROUP
+    }
+
+    private fun btGroup(address: String) = "bt:${address.lowercase()}"
+
+    private fun List<Entry>.firstNotNullFoundDeviceName(): String? {
+        for (entry in this) {
+            val rule = RuleStore.rules.value.firstOrNull { it.id == entry.ruleId }
+            val name = (rule?.trigger as? Trigger.BluetoothDeviceConnected)?.deviceName
+            if (name != null) return name
+        }
+        return null
+    }
+
+    // ---------------------------------------------------------------- focus
+
+    private fun acquireAudioFocusIfNeeded() {
+        if (AppSettings.playInParallel) return
+        if (focusRequest != null) return
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener(focusListener)
+            .build()
+        runCatching { audioManager.requestAudioFocus(request) }
+        focusRequest = request
+    }
+
+    private fun abandonAudioFocusIfIdle() {
+        if (entries.values.any { it.kind == Kind.SOUND }) return
+        abandonAudioFocus()
+    }
+
+    private fun abandonAudioFocus() {
+        focusRequest?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
+        focusRequest = null
+    }
+
+    // ---------------------------------------------------------------- misc
+
     private fun dispatchMediaPause() {
         runCatching {
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
@@ -145,9 +279,11 @@ class RuleEngine(private val context: Context) {
         }
     }
 
-    private fun cancelUrlTimeout() {
-        urlTimeoutRunnable?.let { handler.removeCallbacks(it) }
-        urlTimeoutRunnable = null
+    private fun timeoutMessage(entry: Entry): String =
+        context.getString(R.string.toast_stopped_timeout, formatMinutes(entry.maxMinutes ?: 0.0))
+
+    private fun syncPlaying() {
+        PlaybackState.playing.value = entries.values.associate { it.ruleId to it.label }
     }
 
     private fun soundLabel(action: Action.PlaySound): String {
@@ -168,5 +304,6 @@ class RuleEngine(private val context: Context) {
 
     private companion object {
         const val TAG = "RuleEngine"
+        const val TIME_GROUP = "time"
     }
 }

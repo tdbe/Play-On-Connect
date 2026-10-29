@@ -22,6 +22,13 @@ sealed interface Trigger {
         val deviceAddress: String,
         val deviceName: String? = null,
     ) : Trigger
+
+    @Serializable
+    @SerialName("timeEvent")
+    data class TimeEvent(
+        // Format: "hh:mm:ss repeat:Mo,Tu,We,Th,Fr,Sa,Su" (repeat part optional).
+        val spec: String,
+    ) : Trigger
 }
 
 @Serializable
