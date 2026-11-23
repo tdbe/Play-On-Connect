@@ -22,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Runs rules. Rules in the same trigger group (same Bluetooth device, or all
@@ -207,6 +209,9 @@ class RuleEngine(private val context: Context) {
             toast(context.getString(R.string.error_couldnt_open_url))
             disableIfOneTime(rule)
             return
+        } else {
+            // in case the external player was already open and paused in the notification drawer
+            simpleDelayScheduleJavaExecutor(2,::dispatchMediaPlay)
         }
         action.maxMinutes?.let { minutes ->
             entry.timeoutRunnable = Runnable {
@@ -301,6 +306,21 @@ class RuleEngine(private val context: Context) {
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
         }
+    }
+
+    private fun dispatchMediaPlay() {
+        runCatching {
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+        }
+    }
+
+    fun simpleDelayScheduleJavaExecutor(delay: Long, func: () -> Unit) {
+        val executor = Executors.newSingleThreadScheduledExecutor()
+        executor.schedule({
+            executor.shutdown()
+            func()
+        }, delay, TimeUnit.SECONDS)
     }
 
     private fun timeoutMessage(entry: Entry): String =
