@@ -44,7 +44,7 @@ sealed interface Action {
         val displayNames: List<String>? = null,
         val loop: Boolean = false,
         val maxMinutes: Double? = null,
-        val fadeSeconds: Int? = null,
+        val fadeSeconds: Int? = null
     ) : Action {
         val effectiveUris: List<String>
             get() = uris?.takeIf { it.isNotEmpty() } ?: listOf(uri)
@@ -61,5 +61,6 @@ sealed interface Action {
         val browserPackage: String? = null,
         val appPackage: String? = null,
         val maxMinutes: Double? = null,
+        val forceUseWebBrowsers: Boolean = false
     ) : Action
 }

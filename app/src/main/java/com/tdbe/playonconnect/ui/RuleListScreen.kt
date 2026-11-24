@@ -198,7 +198,7 @@ private fun OpenUrlSummary(action: Action.OpenUrl) {
     )
     Spacer(Modifier.height(4.dp))
     val summary = buildString {
-        append(stringResource(if (action.useDedicatedApp) R.string.summary_mode_dedicated else R.string.summary_mode_browser))
+        append(R.string.summary_mode_dedicated)
         action.maxMinutes?.let {
             append(" · ")
             append(stringResource(R.string.summary_stops_after, formatMinutes(it)))

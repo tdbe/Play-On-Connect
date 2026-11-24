@@ -23,12 +23,11 @@
     <string name="summary_fades_over">fades over %1$d s</string>
     <string name="summary_files_count">%1$d files</string>
     <string name="summary_files_selected">%1$d files selected</string>
-    <string name="summary_mode_browser">In browser</string>
     <string name="summary_mode_dedicated">In app</string>
     <string name="label_sound">Sound</string>
     <string name="or_label">Or</string>
     <string name="undo_delete">Undo Delete</string>
-    <string name="parallel_title">Play in parallel to system media</string>
+    <string name="parallel_title">Play sound files in parallel to system media</string>
     <string name="parallel_note">(if on, you can keep listening to e.g. white noise from this app, while also playing any media from other apps on your device)</string>
 
     <string name="title_add_rule">Add Rule</string>
@@ -58,14 +57,14 @@
 
     <string name="url_label">URL</string>
     <string name="url_placeholder">https://youtube.com/…</string>
-    <string name="url_mode_browser">Web browser</string>
+    <string name="url_mode_browser">Force-select Web Browsers</string>
     <string name="url_mode_dedicated">Dedicated app</string>
     <string name="pick_browser_app">Browser app</string>
     <string name="pick_app_to_use">App to use</string>
     <string name="choose_app">Choose app…</string>
     <string name="no_apps_found">No apps found that can open this link.</string>
-    <string name="required_no_default_browser">Required: no default browser is set on this device.</string>
-    <string name="required_no_dedicated_app">Required: no dedicated app is set for this link.</string>
+    <string name="required_no_default_browser">Required: specify which browser to use.</string>
+    <string name="required_no_dedicated_app">Required: specify which app to use.</string>
 
     <string name="banner_bt_permission">Grant the Bluetooth permission so connections can be detected.</string>
 

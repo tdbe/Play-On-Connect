@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.widget.Toast
 
 object WebApps {
 
@@ -19,7 +21,7 @@ object WebApps {
     }
 
     private fun viewIntent(uri: Uri) =
-        Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
+        Intent(Intent.ACTION_VIEW, uri)//.addCategory(Intent.CATEGORY_BROWSABLE)
 
     fun browserApps(context: Context): List<AppOption> =
         queryApps(context, Uri.parse("https://www.duckduckgo.com"))
@@ -30,8 +32,9 @@ object WebApps {
     }
 
     private fun queryApps(context: Context, uri: Uri): List<AppOption> = runCatching {
-        context.packageManager.queryIntentActivities(viewIntent(uri), 0)
-            .asSequence()
+        val allActivitiesList = context.packageManager.queryIntentActivities(viewIntent(uri), PackageManager.MATCH_ALL)
+        //Toast.makeText(context, "APPS LIST: "+allActivitiesList.size+"; "+allActivitiesList.toString(), Toast.LENGTH_SHORT).show()
+        return allActivitiesList.asSequence()
             .mapNotNull { ri ->
                 val pkg = ri.activityInfo?.packageName ?: return@mapNotNull null
                 if (pkg == context.packageName) return@mapNotNull null

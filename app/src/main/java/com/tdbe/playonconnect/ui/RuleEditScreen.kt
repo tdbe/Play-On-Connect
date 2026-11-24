@@ -2,6 +2,7 @@ package com.tdbe.playonconnect.ui
 
 import android.Manifest
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -108,17 +110,15 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
 
     // Open-url fields
     var url by rememberSaveable(existing?.id) { mutableStateOf((existing?.action as? Action.OpenUrl)?.url ?: "") }
-    var useDedicated by rememberSaveable(existing?.id) {
-        mutableStateOf((existing?.action as? Action.OpenUrl)?.useDedicatedApp ?: false)
-    }
-    var browserPackage by rememberSaveable(existing?.id) {
-        mutableStateOf((existing?.action as? Action.OpenUrl)?.browserPackage)
-    }
     var appPackage by rememberSaveable(existing?.id) {
         mutableStateOf((existing?.action as? Action.OpenUrl)?.appPackage)
     }
     var urlMaxText by rememberSaveable(existing?.id) {
         mutableStateOf((existing?.action as? Action.OpenUrl)?.maxMinutes?.toString() ?: "")
+    }
+
+    var forceUseWebBrowsers by rememberSaveable(existing?.id) {
+        mutableStateOf((existing?.action as? Action.OpenUrl)?.forceUseWebBrowsers)
     }
 
     // Trigger fields
@@ -130,7 +130,6 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
     }
 
     var showDevicePicker by rememberSaveable { mutableStateOf(false) }
-    var showBrowserPicker by rememberSaveable { mutableStateOf(false) }
     var showAppPicker by rememberSaveable { mutableStateOf(false) }
 
     // When not looping, stop-after/fade must not exceed the actual content length.
@@ -163,13 +162,12 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
         }
     }
 
-    val hasDefaultBrowser = remember { WebApps.hasDefaultBrowser(context) }
-    val dedicatedPackage = remember(url) { if (url.isBlank()) null else WebApps.dedicatedAppPackage(context, url) }
-    val browserOptions = remember { WebApps.browserApps(context) }
-    val urlAppOptions = remember(url) { WebApps.appsForUrl(context, url) }
+    //val hasDefaultBrowser = remember { WebApps.hasDefaultBrowser(context) }
+    //val dedicatedPackage = remember(url) { if (url.isBlank()) null else WebApps.dedicatedAppPackage(context, url) }
+    //val browserOptions = remember { WebApps.browserApps(context) }
+    var urlAppOptions = remember { WebApps.appsForUrl(context, url) }
 
-    val browserPickerNeeded = !useDedicated && !hasDefaultBrowser
-    val appPickerNeeded = useDedicated && dedicatedPackage == null
+    val appPickerNeeded = true// && dedicatedPackage == null
 
     val soundMax = sanitizeDecimalInput(soundMaxText).toDoubleOrNull()?.takeIf { it > 0 }
     val fadeRaw = fadeText.trim().toIntOrNull()
@@ -185,7 +183,7 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
 
         ActionType.OPEN_URL ->
             url.isNotBlank() &&
-                (!browserPickerNeeded || browserPackage != null) &&
+                //(!browserPickerNeeded || browserPackage != null) &&
                 (!appPickerNeeded || appPackage != null)
     }
 
@@ -230,14 +228,15 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                                 displayNames = soundNames.takeIf { it.size > 1 },
                                 loop = loop,
                                 maxMinutes = soundMax,
-                                fadeSeconds = clampedFade,
+                                fadeSeconds = clampedFade
                             )
                         }
 
                         ActionType.OPEN_URL -> Action.OpenUrl(
                             url = url.trim(),
-                            useDedicatedApp = useDedicated,
-                            browserPackage = browserPackage,
+                            forceUseWebBrowsers = forceUseWebBrowsers?: false,
+                            useDedicatedApp = forceUseWebBrowsers?: false,
+                            //browserPackage = browserPackage,
                             appPackage = appPackage,
                             maxMinutes = urlMax,
                         )
@@ -427,28 +426,18 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
                         )
                         Spacer(Modifier.height(8.dp))
                         Row(
-                            Modifier.clickable { useDedicated = false },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(selected = !useDedicated, onClick = { useDedicated = false })
+                            Checkbox(
+                                checked = forceUseWebBrowsers?: false,
+                                onCheckedChange = {
+                                    forceUseWebBrowsers = it
+                                }
+                            )
                             Text(stringResource(R.string.url_mode_browser))
                         }
-                        Row(
-                            Modifier.clickable { useDedicated = true },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = useDedicated, onClick = { useDedicated = true })
-                            Text(stringResource(R.string.url_mode_dedicated))
-                        }
+
                         Spacer(Modifier.height(8.dp))
-                        if (browserPickerNeeded) {
-                            AppPickerField(
-                                label = stringResource(R.string.pick_browser_app),
-                                selectedPackage = browserPackage,
-                                requiredHint = stringResource(R.string.required_no_default_browser),
-                                onClick = { showBrowserPicker = true },
-                            )
-                        }
                         if (appPickerNeeded) {
                             AppPickerField(
                                 label = stringResource(R.string.pick_app_to_use),
@@ -485,15 +474,16 @@ fun RuleEditScreen(ruleId: String?, rules: List<Rule>, onDone: () -> Unit, onReq
             },
         )
     }
-    if (showBrowserPicker) {
-        AppListPickerDialog(
-            title = stringResource(R.string.pick_browser_app),
-            options = browserOptions,
-            onDismiss = { showBrowserPicker = false },
-            onSelect = { browserPackage = it.packageName; showBrowserPicker = false },
-        )
-    }
+
     if (showAppPicker) {
+        if(forceUseWebBrowsers == true) {
+            urlAppOptions = remember { WebApps.appsForUrl(context, "https://www.duckduckgo.com")}
+        }
+        else {
+            urlAppOptions = remember { WebApps.appsForUrl(context, url) }
+        }
+        //Toast.makeText(context, "c forceUseWebBrowsers: "+forceUseWebBrowsers+"; urlAppOptions: "+urlAppOptions.size, Toast.LENGTH_SHORT).show()
+
         AppListPickerDialog(
             title = stringResource(R.string.pick_app_to_use),
             options = urlAppOptions,

@@ -200,8 +200,9 @@ class RuleEngine(private val context: Context) {
         syncPlaying()
         Log.d(TAG, "Rule ${rule.id} triggered: opening ${action.url}")
         toast(context.getString(R.string.toast_opening_url, action.url))
-        val pkg = (if (action.useDedicatedApp) action.appPackage else action.browserPackage)
-            ?.takeIf { it.isNotBlank() }
+        //val pkg = (if (action.useDedicatedApp) action.appPackage else action.browserPackage)
+        //    ?.takeIf { it.isNotBlank() }
+        val pkg = action.appPackage
         val opened = WebApps.open(context, action.url, pkg)
         if (!opened) {
             entries.remove(rule.id)
